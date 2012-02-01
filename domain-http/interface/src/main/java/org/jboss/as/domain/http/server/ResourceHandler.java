@@ -182,7 +182,7 @@ class ResourceHandler implements ManagementHttpHandler {
                     lastExpiryHeader = createDateFormat().format(new Date(lastExpiryDate));
                 }
 
-                responseHeaders.add(CACHE_CONTROL_HEADER, "private, max-age=2678400, must-revalidate");
+                //responseHeaders.add(CACHE_CONTROL_HEADER, "private, max-age=2678400, must-revalidate");
                 responseHeaders.add(EXPIRES_HEADER, lastExpiryHeader);
             }
 
