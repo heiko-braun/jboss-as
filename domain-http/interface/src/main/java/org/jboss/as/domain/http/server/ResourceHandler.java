@@ -54,6 +54,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
@@ -86,6 +87,11 @@ class ResourceHandler implements ManagementHttpHandler {
 
     private static Map<String, String> contentTypeMapping = new ConcurrentHashMap<String, String>();
     private static final String FORMAT_STRING = "EEE, dd MMM yyyy HH:mm:ss z";
+    private static final String CONTENT_ENCODING = "Content-Encoding";
+    private static final String GZIP = "gzip";
+    private static final String ACCEPT_ENCODING = "Accept-Encoding";
+    private static final String META_INF = "META-INF";
+    private static final String GZ = ".gz";
 
     private final String context;
     private final String defaultResource;
@@ -157,15 +163,36 @@ class ResourceHandler implements ManagementHttpHandler {
          * This allows a sub-class of the ResourceHandler to store resources it may need in META-INF
          * without these resources being served up to remote clients unchecked.
          */
-        if (resource.startsWith("META-INF")) {
+        if (resource.startsWith(META_INF)) {
             http.sendResponseHeaders(FORBIDDEN, 0);
             http.close();
 
             return;
         }
 
+        // check if gzip encoding is supported
+        boolean gzipSupported = false;
+        List<String> encodingHeader = http.getRequestHeaders().get(ACCEPT_ENCODING);
+        if(encodingHeader!=null) {
+            for(String headerValue : encodingHeader) {
+                if(headerValue.contains(GZIP)) {
+                    gzipSupported = true;
+                    break;
+                }
+            }
+        }
+
         // load resource
-        ResourceHandle handle = getResourceHandle(resource);
+        ResourceHandle handle = null;
+        boolean gzipEncoded = false;
+        if(gzipSupported)
+            handle = getResourceHandle(resource+ GZ);
+
+        if(null==handle.getInputStream()) {
+            handle = getResourceHandle(resource);
+        } else {
+            gzipEncoded = true;
+        }
 
         if(handle.getInputStream()!=null) {
 
@@ -182,10 +209,16 @@ class ResourceHandler implements ManagementHttpHandler {
                     lastExpiryHeader = createDateFormat().format(new Date(lastExpiryDate));
                 }
 
-                responseHeaders.add(CACHE_CONTROL_HEADER, "private, max-age=2678400, must-revalidate");
                 responseHeaders.add(EXPIRES_HEADER, lastExpiryHeader);
             }
+            else {
+                // if it should not be cached, clearly tell the client
+                responseHeaders.add(CACHE_CONTROL_HEADER, "public, max-age=0, must-revalidate");
+            }
 
+            if(gzipEncoded) {
+                responseHeaders.add(CONTENT_ENCODING, GZIP);
+            }
             responseHeaders.add(LAST_MODIFIED_HEADER, lastModified);
             responseHeaders.add(CONTENT_LENGTH_HEADER, String.valueOf(handle.getSize()));
 
