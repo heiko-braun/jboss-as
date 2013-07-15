@@ -614,7 +614,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
     public void registerHostModel(String hostName, ManagementResourceRegistration root) {
         HostModelUtil.createHostRegistry(hostName, root, hostControllerConfigurationPersister, environment, runningModeControl,
                 localFileRepository, hostControllerInfo, new DelegatingServerInventory(), remoteFileRepository, contentRepository,
-                this, extensionRegistry,vaultReader, ignoredRegistry, processState, pathManager);
+                this, extensionRegistry,vaultReader, ignoredRegistry, processState, pathManager, authorizer);
     }
 
 
@@ -642,7 +642,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
             final PathManagerService pathManager) {
 
         DomainRootDefinition domainRootDefinition = new DomainRootDefinition(this, environment, configurationPersister, contentRepo, fileRepository, isMaster, hostControllerInfo,
-                extensionRegistry, ignoredDomainResourceRegistry, pathManager, isMaster ? runtimeIgnoreTransformationRegistry : null);
+                extensionRegistry, ignoredDomainResourceRegistry, pathManager, isMaster ? runtimeIgnoreTransformationRegistry : null, authorizer);
         rootResourceDefinition.setDelegate(domainRootDefinition, root);
     }
 

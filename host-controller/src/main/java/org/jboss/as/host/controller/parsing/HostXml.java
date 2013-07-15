@@ -111,7 +111,7 @@ import org.jboss.staxmapper.XMLExtendedStreamWriter;
  * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>
  * @author <a href="mailto:jperkins@jboss.com">James R. Perkins</a>
  */
-public class HostXml extends CommonXml implements ManagementXml.Delegate {
+public class HostXml extends CommonXml {
 
     private final String defaultHostControllerName;
 
@@ -179,7 +179,7 @@ public class HostXml extends CommonXml implements ManagementXml.Delegate {
         }
 
         if (hasCoreServices) {
-            ManagementXml managementXml = new ManagementXml(this);
+            ManagementXml managementXml = new ManagementXml(new ManagementXmlDelegate());
             //TODO pass in proper access-constraint node
             managementXml.writeManagement(writer, modelNode.get(CORE_SERVICE, MANAGEMENT), new ModelNode(), true);
             writeNewLine(writer);
@@ -310,7 +310,7 @@ public class HostXml extends CommonXml implements ManagementXml.Delegate {
         }
 
         if (element == Element.MANAGEMENT) {
-            ManagementXml managementXml = new ManagementXml(this);
+            ManagementXml managementXml = new ManagementXml(new ManagementXmlDelegate());
             managementXml.parseManagement(reader, address, DOMAIN_1_0, list, false);
             element = nextElement(reader, DOMAIN_1_0);
         }
@@ -411,7 +411,7 @@ public class HostXml extends CommonXml implements ManagementXml.Delegate {
             element = nextElement(reader, namespace);
         }
         if (element == Element.MANAGEMENT) {
-            ManagementXml managementXml = new ManagementXml(this);
+            ManagementXml managementXml = new ManagementXml(new ManagementXmlDelegate());
             managementXml.parseManagement(reader, address, namespace, list, true);
             element = nextElement(reader, namespace);
         } else {
@@ -445,60 +445,6 @@ public class HostXml extends CommonXml implements ManagementXml.Delegate {
             throw unexpectedElement(reader);
         }
 
-    }
-
-    @Override
-    public void parseManagementInterfaces(final XMLExtendedStreamReader reader, final ModelNode address, final Namespace expectedNs,
-            final List<ModelNode> list) throws XMLStreamException {
-
-        requireNoAttributes(reader);
-        Set<Element> required = EnumSet.of(Element.NATIVE_INTERFACE);
-        while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
-            requireNamespace(reader, expectedNs);
-            final Element element = Element.forName(reader.getLocalName());
-            required.remove(element);
-            switch (element) {
-                case NATIVE_INTERFACE: {
-                    switch (expectedNs) {
-                        case DOMAIN_1_0:
-                            parseNativeManagementInterface1_0(reader, address, list);
-                            break;
-                        case DOMAIN_1_1:
-                        case DOMAIN_1_2:
-                        case DOMAIN_1_3:
-                        case DOMAIN_1_4:
-                            parseManagementInterface1_1(reader, address, false, expectedNs, list);
-                            break;
-                        default:
-                            parseManagementInterface2_0(reader, address, false, expectedNs, list);
-                    }
-                    break;
-                }
-                case HTTP_INTERFACE: {
-                    switch (expectedNs) {
-                        case DOMAIN_1_0:
-                            parseHttpManagementInterface1_0(reader, address, list);
-                            break;
-                        case DOMAIN_1_1:
-                        case DOMAIN_1_2:
-                        case DOMAIN_1_3:
-                        case DOMAIN_1_4:
-                            parseManagementInterface1_1(reader, address, true, expectedNs, list);
-                            break;
-                        default:
-                            parseManagementInterface2_0(reader, address, true, expectedNs, list);
-                    }
-                    break;
-                }
-                default: {
-                    throw unexpectedElement(reader);
-                }
-            }
-        }
-
-        if (!required.isEmpty()) {
-            throw missingRequiredElement(reader, required);
-        }
     }
 
     private void parseHttpManagementInterface1_0(final XMLExtendedStreamReader reader, final ModelNode address,
@@ -1732,37 +1678,6 @@ public class HostXml extends CommonXml implements ManagementXml.Delegate {
 
     }
 
-    @Override
-    public void writeNativeManagementProtocol(final XMLExtendedStreamWriter writer, final ModelNode protocol)
-            throws XMLStreamException {
-
-        writer.writeStartElement(Element.NATIVE_INTERFACE.getLocalName());
-        NativeManagementResourceDefinition.SECURITY_REALM.marshallAsAttribute(protocol, writer);
-
-        writer.writeEmptyElement(Element.SOCKET.getLocalName());
-        NativeManagementResourceDefinition.INTERFACE.marshallAsAttribute(protocol, writer);
-        NativeManagementResourceDefinition.NATIVE_PORT.marshallAsAttribute(protocol, writer);
-
-        writer.writeEndElement();
-    }
-
-    @Override
-    public void writeHttpManagementProtocol(final XMLExtendedStreamWriter writer, final ModelNode protocol)
-            throws XMLStreamException {
-
-        writer.writeStartElement(Element.HTTP_INTERFACE.getLocalName());
-        HttpManagementResourceDefinition.SECURITY_REALM.marshallAsAttribute(protocol, writer);
-        HttpManagementResourceDefinition.CONSOLE_ENABLED.marshallAsAttribute(protocol, writer);
-        HttpManagementResourceDefinition.HTTP_UPGRADE_ENABLED.marshallAsAttribute(protocol, writer);
-
-        writer.writeEmptyElement(Element.SOCKET.getLocalName());
-        HttpManagementResourceDefinition.INTERFACE.marshallAsAttribute(protocol, writer);
-        HttpManagementResourceDefinition.HTTP_PORT.marshallAsAttribute(protocol, writer);
-        HttpManagementResourceDefinition.HTTPS_PORT.marshallAsAttribute(protocol, writer);
-
-        writer.writeEndElement();
-    }
-
     private void writeDomainController(final XMLExtendedStreamWriter writer, final ModelNode modelNode, ModelNode ignoredResources,
             ModelNode discoveryOptionsOrdering, ModelNode staticDiscoveryOptions, ModelNode discoveryOptions) throws XMLStreamException {
         writer.writeStartElement(Element.DOMAIN_CONTROLLER.getLocalName());
@@ -1901,6 +1816,114 @@ public class HostXml extends CommonXml implements ManagementXml.Delegate {
 
             writer.writeEndElement();
         }
+    }
+
+    private class ManagementXmlDelegate extends ManagementXml.Delegate {
+
+        @Override
+        public void parseManagementInterfaces(final XMLExtendedStreamReader reader, final ModelNode address, final Namespace expectedNs,
+                                              final List<ModelNode> list) throws XMLStreamException {
+
+            requireNoAttributes(reader);
+            Set<Element> required = EnumSet.of(Element.NATIVE_INTERFACE);
+            while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+                requireNamespace(reader, expectedNs);
+                final Element element = Element.forName(reader.getLocalName());
+                required.remove(element);
+                switch (element) {
+                    case NATIVE_INTERFACE: {
+                        switch (expectedNs) {
+                            case DOMAIN_1_0:
+                                parseNativeManagementInterface1_0(reader, address, list);
+                                break;
+                            case DOMAIN_1_1:
+                            case DOMAIN_1_2:
+                            case DOMAIN_1_3:
+                            case DOMAIN_1_4:
+                                parseManagementInterface1_1(reader, address, false, expectedNs, list);
+                                break;
+                            default:
+                                parseManagementInterface2_0(reader, address, false, expectedNs, list);
+                        }
+                        break;
+                    }
+                    case HTTP_INTERFACE: {
+                        switch (expectedNs) {
+                            case DOMAIN_1_0:
+                                parseHttpManagementInterface1_0(reader, address, list);
+                                break;
+                            case DOMAIN_1_1:
+                            case DOMAIN_1_2:
+                            case DOMAIN_1_3:
+                            case DOMAIN_1_4:
+                                parseManagementInterface1_1(reader, address, true, expectedNs, list);
+                                break;
+                            default:
+                                parseManagementInterface2_0(reader, address, true, expectedNs, list);
+                        }
+                        break;
+                    }
+                    default: {
+                        throw unexpectedElement(reader);
+                    }
+                }
+            }
+
+            if (!required.isEmpty()) {
+                throw missingRequiredElement(reader, required);
+            }
+        }
+
+        @Override
+        public void parseAccessControl(final XMLExtendedStreamReader reader, final ModelNode address, final Namespace expectedNs,
+                                       final List<ModelNode> list) throws XMLStreamException {
+            ParseUtils.requireNoAttributes(reader);
+
+            while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+                requireNamespace(reader, expectedNs);
+                final Element element = Element.forName(reader.getLocalName());
+                switch (element) {
+                    case HOST_SCOPED_ROLES:
+                        ManagementXml.parseHostScopedRoles(reader, address, expectedNs, list);
+                        break;
+                    default: {
+                        throw unexpectedElement(reader);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void writeNativeManagementProtocol(final XMLExtendedStreamWriter writer, final ModelNode protocol)
+                throws XMLStreamException {
+
+            writer.writeStartElement(Element.NATIVE_INTERFACE.getLocalName());
+            NativeManagementResourceDefinition.SECURITY_REALM.marshallAsAttribute(protocol, writer);
+
+            writer.writeEmptyElement(Element.SOCKET.getLocalName());
+            NativeManagementResourceDefinition.INTERFACE.marshallAsAttribute(protocol, writer);
+            NativeManagementResourceDefinition.NATIVE_PORT.marshallAsAttribute(protocol, writer);
+
+            writer.writeEndElement();
+        }
+
+        @Override
+        public void writeHttpManagementProtocol(final XMLExtendedStreamWriter writer, final ModelNode protocol)
+                throws XMLStreamException {
+
+            writer.writeStartElement(Element.HTTP_INTERFACE.getLocalName());
+            HttpManagementResourceDefinition.SECURITY_REALM.marshallAsAttribute(protocol, writer);
+            HttpManagementResourceDefinition.CONSOLE_ENABLED.marshallAsAttribute(protocol, writer);
+            HttpManagementResourceDefinition.HTTP_UPGRADE_ENABLED.marshallAsAttribute(protocol, writer);
+
+            writer.writeEmptyElement(Element.SOCKET.getLocalName());
+            HttpManagementResourceDefinition.INTERFACE.marshallAsAttribute(protocol, writer);
+            HttpManagementResourceDefinition.HTTP_PORT.marshallAsAttribute(protocol, writer);
+            HttpManagementResourceDefinition.HTTPS_PORT.marshallAsAttribute(protocol, writer);
+
+            writer.writeEndElement();
+        }
+
     }
 
 }

@@ -27,6 +27,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.COR
 
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleResourceDefinition;
+import org.jboss.as.controller.access.DelegatingConfigurableAuthorizer;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.domain.management._private.DomainManagementResolver;
@@ -38,25 +39,57 @@ import org.jboss.as.domain.management._private.DomainManagementResolver;
  */
 public class AccessControlResourceDefinition extends SimpleResourceDefinition {
 
-    public static final AccessControlResourceDefinition INSTANCE = new AccessControlResourceDefinition();
     public static final Resource RESOURCE = createResource();
 
-    private AccessControlResourceDefinition() {
-        super(PathElement.pathElement(CORE_SERVICE, ACCESS_CONTROL), DomainManagementResolver
-                .getResolver("core.access-control"));
+    private final DelegatingConfigurableAuthorizer configurableAuthorizer;
+    private final boolean isDomain;
+    private final boolean isHostController;
+
+    public static AccessControlResourceDefinition forDomain(DelegatingConfigurableAuthorizer configurableAuthorizer) {
+        return new AccessControlResourceDefinition(configurableAuthorizer, true, false);
+    }
+
+    public static AccessControlResourceDefinition forHost(DelegatingConfigurableAuthorizer configurableAuthorizer) {
+        return new AccessControlResourceDefinition(configurableAuthorizer, true, true);
+    }
+
+    public static AccessControlResourceDefinition forDomainServer(DelegatingConfigurableAuthorizer configurableAuthorizer) {
+        return new AccessControlResourceDefinition(configurableAuthorizer, true, false);
+    }
+
+    public static AccessControlResourceDefinition forStandaloneServer(DelegatingConfigurableAuthorizer configurableAuthorizer) {
+        return new AccessControlResourceDefinition(configurableAuthorizer, false, false);
+    }
+
+    private AccessControlResourceDefinition(DelegatingConfigurableAuthorizer configurableAuthorizer, boolean domain, boolean hostController) {
+        super(PathElement.pathElement(CORE_SERVICE, ACCESS_CONTROL), DomainManagementResolver.getResolver("core.access-control"));
+        this.configurableAuthorizer = configurableAuthorizer;
+        isDomain = domain;
+        isHostController = hostController;
     }
 
     @Override
     public void registerChildren(ManagementResourceRegistration resourceRegistration) {
         // Role Mapping
+        if (!isHostController) {
+            // TODO
+        }
+
+        // Scoped roles
+        if (isDomain) {
+            resourceRegistration.registerSubModel(new ServerGroupScopedRoleResourceDefinition(configurableAuthorizer));
+            resourceRegistration.registerSubModel(new HostScopedRolesResourceDefinition(configurableAuthorizer));
+        }
 
         // Constraints
         //  -- Application Type
-        resourceRegistration.registerSubModel(ApplicationTypeParentResourceDefinition.INSTANCE);
-        //  -- Sensitivity Classification
-        resourceRegistration.registerSubModel(SensitivityClassificationParentResourceDefinition.INSTANCE);
-        //  -- Vault Expression
-        resourceRegistration.registerSubModel(SensitivityResourceDefinition.createVaultExpressionConfiguration());
+        if (!isHostController) {
+            resourceRegistration.registerSubModel(ApplicationTypeParentResourceDefinition.INSTANCE);
+            //  -- Sensitivity Classification
+            resourceRegistration.registerSubModel(SensitivityClassificationParentResourceDefinition.INSTANCE);
+            //  -- Vault Expression
+            resourceRegistration.registerSubModel(SensitivityResourceDefinition.createVaultExpressionConfiguration());
+        }
     }
 
     private static Resource createResource() {
